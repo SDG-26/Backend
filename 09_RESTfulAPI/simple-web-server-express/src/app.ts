@@ -59,6 +59,26 @@ app.put(
 	},
 );
 
+app.patch(
+	'/posts/:id',
+	async (req: Request<{ id: string }, {}, Partial<PostType>>, res) => {
+		const { id } = req.params;
+		if (!isValidObjectId(id)) {
+			return res.json({ message: 'Id not valid' });
+		}
+		const updatedPost = await Post.findByIdAndUpdate(
+			id,
+			{
+				$set: req.body,
+			},
+			{ returnDocument: 'after', runValidators: true },
+		);
+
+		if (!updatedPost) return res.json({ message: 'Post not found' });
+		res.json(updatedPost);
+	},
+);
+
 app.delete('/posts/:id', async (req, res) => {
 	const { id } = req.params;
 	if (!isValidObjectId(id)) {
