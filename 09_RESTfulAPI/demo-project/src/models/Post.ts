@@ -1,4 +1,5 @@
-import { Schema, model, type HydratedDocument, type InferRawDocType, type InferSchemaType } from 'mongoose';
+import { Schema, model } from 'mongoose';
+import mongoose from 'mongoose';
 
 const postSchema = new Schema(
   {
@@ -15,7 +16,14 @@ const postSchema = new Schema(
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'User ID is required']
+      required: [true, 'User ID is required'],
+      validate: {
+        validator: async (id: string) => {
+          const result = await mongoose.model('User').exists({ _id: id });
+          return !!result;
+        },
+        message: 'User does not exist'
+      }
     }
   },
   {
