@@ -1,5 +1,5 @@
 import { type RequestHandler } from 'express';
-import { User } from '#models';
+import { Post, User } from '#models';
 import type { userInputSchema, userOutputSchema } from '#schema';
 import { z } from 'zod/v4';
 
@@ -40,7 +40,22 @@ export const updateUser: RequestHandler<{ id: string }, UserOutputDTO, UserInput
 };
 
 export const deleteUser: RequestHandler<{ id: string }> = async (req, res) => {
-  const user = await User.findByIdAndDelete(req.user.id);
-  if (!user) throw new Error('User context lost');
-  res.json({ message: 'User deleted' });
+  const user = req.user;
+  if (!user) throw new Error('user context lost');
+
+  const session = await User.startSession();
+  session.startTransaction();
+  try {
+    const deletedUser = await User.findByIdAndDelete(req.user.id, { session });
+    if (!deletedUser) throw new Error('User not found');
+
+    const posts = await Post.deleteMany({ userId: user._id }, { session });
+    await session.commitTransaction();
+    res.json({ message: 'User and associated posts deleted' });
+  } catch (error) {
+    await session.abortTransaction();
+    throw Error('Deleting user failed');
+  } finally {
+    await session.endSession();
+  }
 };
