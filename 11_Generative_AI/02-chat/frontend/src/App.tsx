@@ -1,4 +1,5 @@
-import { useState, type SubmitEventHandler } from "react";
+import { useState } from "react";
+import type { FormEventHandler } from "react";
 import "./App.css";
 
 function App() {
@@ -7,7 +8,7 @@ function App() {
   const [chatId, setChatId] = useState("");
   const [aiResponse, setAiResponse] = useState("");
 
-  const handleSubmit: SubmitEventHandler = async (e) => {
+  const handleSubmit: FormEventHandler = async (e) => {
     e.preventDefault();
 
     try {
