@@ -39,16 +39,16 @@ const Chat = mongoose.model("chat", chatSchema);
 // const client = new OpenAI();
 
 //   2. Google Gemini über dessen OpenAI-kompatible API
-// const client = new OpenAI({
-//   baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
-//   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-// });
+const client = new OpenAI({
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+});
 
 //   3. Lokales Modell via Ollama – kein API-Key erforderlich
 // Lokales LLM über Ollama (läuft auf Port 11434)
-const client = new OpenAI({
-  baseURL: "http://127.0.0.1:11434/v1",
-});
+// const client = new OpenAI({
+//   baseURL: "http://127.0.0.1:11434/v1",
+// });
 
 // ─── Express-Setup ────────────────────────────────────────────────────────────
 const port = process.env.PORT || 8080;
@@ -67,7 +67,8 @@ app.get("/", (_req, res) => {
 const systemPrompt = {
   role: "system",
   content:
-    "Du bist ein Senior Software Architect und antwortest niemals mit Code auf programmierbezogene Fragen. Außerdem antwortest du nur sehr knapp in maximal 5 Sätzen.",
+    // "Du bist ein Senior Software Architect und antwortest niemals mit Code auf programmierbezogene Fragen. Außerdem antwortest du nur sehr knapp in maximal 5 Sätzen.",
+    "Du bist ein Coding-Enthusiast und antwortest gerne mit Code-Snippets, selbst wenn es eigtlich nicht passt.",
 };
 
 // ─── POST /messages ───────────────────────────────────────────────────────────
@@ -90,14 +91,15 @@ app.post("/messages", async (req, res) => {
   // Die gesamte bisherige History wird mitgeschickt – so "erinnert" sich das
   // Modell an den Gesprächsverlauf (Kontext-Fenster-Prinzip).
   const result = await client.chat.completions.create({
-    // model: "gemini-3.1-flash-lite-preview",
-    model: "llama3.2",
+    // model: "gpt-5-mini",
+    model: "gemini-3.1-flash-lite-preview",
+    // model: "llama3.2",
     // Bisherige History + neue Nutzernachricht
     messages: [...chat.history, { role: "user", content: prompt }],
 
     // temperature steuert die Kreativität/Zufälligkeit der Antworten.
     // 0 = deterministisch, 2 = sehr kreativ/chaotisch
-    temperature: 1.5,
+    // temperature: 1.5,
     // max_completion_tokens: 200,  // Antwortlänge begrenzen, wird bei manchen Modellein abgeschnitten
     // reasoning_effort: "minimal", // Nur bei Reasoning-Modellen (z. B. o3)
     // nicht alle Properties sind auf allen Modellen verfügbar
@@ -120,10 +122,81 @@ app.post("/messages", async (req, res) => {
   res.json({ answer, chatId: chat._id });
 });
 
-// ─── To be continued...────────────────────────────────────────────────────
+// ─── POST /messages/streaming ─────────────────────────────────────────────────
+// Streaming-Variante des Chat-Endpunkts.
+// Statt auf die vollständige Antwort zu warten, wird jedes Stückchen
+// der Antwort sofort an den Client geschickt
+app.post("/messages/streaming", async (req, res) => {
+  const { prompt, chatId } = req.body;
 
-app.post("/messages/streaming", async (req, res) => {});
+  // Chat laden oder neu erstellen (identisch zu /messages)
+  let chat: ChatDocument;
+  if (!chatId) {
+    chat = await Chat.create({ history: [systemPrompt] });
+  } else {
+    chat = (await Chat.findById(chatId)) as ChatDocument;
+  }
 
+  // stream: true aktiviert den Streaming-Modus im OpenAI-Client.
+  // Das Modell liefert die Antwort dann als AsyncIterator von Chunks
+  // statt als einzelnes vollständiges Objekt.
+  const result = await client.chat.completions.create({
+    model: "gemini-3.1-flash-lite-preview",
+    messages: [...chat.history, { role: "user", content: prompt }],
+    stream: true,
+  });
+
+  // SSE-Header setzen, bevor Daten gesendet werden.
+  // - text/event-stream: Teilt dem Browser mit, dass es sich um einen SSE-Stream handelt
+  // - keep-alive:        Hält die TCP-Verbindung offen, bis der Stream endet
+  // - no-cache:          Verhindert, dass Proxies oder Browser die Antwort puffern
+  res.writeHead(200, {
+    "content-type": "text/event-stream",
+    connection: "keep-alive",
+    "cache-control": "no-cache",
+  });
+
+  // Sammelt die vollständige Antwort
+  let answer = "";
+
+  // Das LLM liefert die Antwort in kleinen Paketen (Chunks).
+  // Jeder Chunk enthält ein oder wenige neue Token im delta.content-Feld.
+  for await (const chunk of result) {
+    const text = chunk.choices[0]?.delta.content;
+    console.log(text);
+    answer += text; // Token zur Gesamtantwort hinzufügen
+
+    // Leere Chunks (z. B. das abschließende Stop-Signal) überspringen,
+    // damit kein leeres Event an den Client geschickt wird.
+    if (!text) continue;
+
+    // SSE-Format: jede Nachricht beginnt mit "data: " und endet mit zwei Zeilenumbrüchen.
+    // Das Frontend kann diese Events mit einem EventSource-Objekt empfangen.
+    res.write(`data: ${JSON.stringify(text)}\n\n`);
+  }
+
+  // Nach dem Stream: vollständige History in der DB persistieren.
+  // Erst jetzt ist die komplette Antwort bekannt.
+  chat.history = [
+    ...chat.history,
+    { role: "user", content: prompt } as unknown as ChatMessage,
+    { role: "assistant", content: answer } as unknown as ChatMessage,
+  ];
+  chat.save();
+
+  // Die chatId wird als eigener SSE-Event-Typ ("chat:") am Ende geschickt,
+  // damit das Frontend weiß, welche ID es für Folgenachrichten verwenden soll.
+  res.write(`chat: ${JSON.stringify(chat._id)}\n\n`);
+
+  // Stream serverseitig beenden
+  res.end();
+
+  // Sicherheitsnetz: falls der Client die Verbindung trennt bevor res.end()
+  // aufgerufen wurde, wird der Stream trotzdem sauber geschlossen.
+  res.on("close", () => {
+    res.end();
+  });
+});
 app.post("/images", async (req, res) => {});
 
 // ────────────────────────────────────────────────────
