@@ -3,6 +3,8 @@ import type { ErrorRequestHandler } from "express";
 import express from "express";
 import { OpenAI } from "openai/client.js";
 import mongoose from "mongoose";
+import { z } from "zod";
+import { zodResponseFormat } from "openai/helpers/zod.mjs";
 
 await mongoose.connect(process.env.MONGO_URI!, { dbName: "llm" });
 
@@ -72,7 +74,7 @@ app.post("/messages", async (req, res) => {
 app.post("/messages/streaming", async (req, res) => {
   const { prompt } = req.body;
   const chatId = req.headers["x-chat-id"];
-  console.log(chatId);
+
   let chat: ChatDocument;
   if (!chatId) {
     chat = await Chat.create({ history: [systemPrompt] });
@@ -88,13 +90,12 @@ app.post("/messages/streaming", async (req, res) => {
 
   res.set({
     "content-type": "text/plain; charset=utf-8",
-    "x-chat-id": chat._id.toString(),
+    "x-chat-id": (chat._id as mongoose.ObjectId).toString(),
     "access-control-expose-headers": "x-chat-id",
   });
 
   for await (const chunk of stream.toReadableStream()) {
     res.write(chunk);
-    console.log(chunk);
   }
   const answer = await stream.finalMessage();
   const { content } = answer;
@@ -110,7 +111,61 @@ app.post("/messages/streaming", async (req, res) => {
 
 // ────────────────────────────────────────────────────
 
-app.post("/images", async (req, res) => {});
+app.post("/images", async (req, res) => {
+  const { prompt } = req.body;
+
+  const result = await client.images.generate({
+    prompt: prompt,
+    model: "imagen-4.0-generate-001",
+    response_format: "b64_json",
+  });
+
+  // base64 speichern, Cloudinary, AWS...
+
+  res.json(result);
+});
+
+// ────────────────────────────────────────────────────
+
+const Recipe = z.object({
+  title: z.string(),
+  nop: z
+    .number()
+    .describe("Numbers of persons the recipe is designed for. Default to 4 if not stated else."),
+  ingredients: z.array(
+    z.object({
+      name: z.string(),
+      quantity: z.number(),
+      unit: z
+        .string()
+        .describe("The unit of the quantity of the ingredient. Use metric units if possible"),
+    }),
+  ),
+  time_in_minutes: z.number(),
+  preparations_description: z.string().max(2000),
+});
+
+app.post("/recipes", async (req, res) => {
+  const { prompt } = req.body;
+
+  const recipe = await client.chat.completions.parse({
+    model: "gemini-3.1-flash-lite-preview",
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are an innovative chef who likes to create new cooking recipes. You really like pepper.",
+      },
+      {
+        role: "user",
+        content: prompt,
+      },
+    ],
+    response_format: zodResponseFormat(Recipe, "recipe"),
+  });
+
+  res.json({ recipe: recipe.choices[0]?.message.parsed });
+});
 
 // ────────────────────────────────────────────────────
 app.use("/{*splat}", () => {

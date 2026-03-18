@@ -67,6 +67,7 @@ function App() {
   const reset = () => {
     setAiResponse("");
     setPrompt("");
+    setChatId("");
   };
 
   return (
