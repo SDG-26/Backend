@@ -5,8 +5,16 @@ import mongoose from "mongoose";
 import { OpenAI } from "openai";
 import { z } from "zod";
 
-import { Agent, run, setDefaultOpenAIClient, tool } from "@openai/agents";
-import type { AgentInputItem } from "@openai/agents";
+import {
+  Agent,
+  handoff,
+  InputGuardrailTripwireTriggered,
+  OutputGuardrailTripwireTriggered,
+  run,
+  setDefaultOpenAIClient,
+  tool,
+} from "@openai/agents";
+import type { AgentInputItem, InputGuardrail, OutputGuardrail } from "@openai/agents";
 
 await mongoose.connect(process.env.MONGO_URI!, { dbName: "llm-agents" });
 
@@ -27,22 +35,10 @@ const chatSchema = new mongoose.Schema<ChatDocument>({
 
 const Chat = mongoose.model("chat", chatSchema);
 
-const client = new OpenAI();
-
-// setDefaultOpenAIClient registriert den Client global –
-// alle Agents in dieser App nutzen ihn automatisch, ohne ihn pro Agent angeben zu müssen.
-// Das ermöglicht auch den einfachen Austausch gegen andere OpenAI-kompatible Anbieter (s. Kommentare unten)
-
-// Alternativ: Google Gemini
-// const client = new OpenAI({
-//   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-//   baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-// });
-
-// Alternativ: Lokales Modell mit Ollama
-// const client = new OpenAI({
-//   baseURL: 'http://127.0.0.1:11434',
-// });
+const client = new OpenAI({
+  apiKey: process.env.OPEN_ROUTER_API_KEY,
+  baseURL: "https://openrouter.ai/api/v1",
+});
 
 setDefaultOpenAIClient(client);
 
@@ -111,7 +107,7 @@ const pokeTool = tool({
   // `execute` wird aufgerufen, sobald das Modell entscheidet, dieses Tool zu nutzen.
   // Der Rückgabewert wird automatisch als Tool-Ergebnis zurück ans Modell gesendet.
   async execute(input) {
-    console.log("RUNNING TOOL WITH INTPUT: ", input);
+    console.log("RUNNING TOOL WITH INPUT: ", input);
 
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${input.pokemon}`);
     const data = await res.json();
@@ -142,6 +138,175 @@ app.post("/pokemon", async (req, res) => {
   const result = await run(pokeAgent, prompt);
 
   res.json({ result: result.finalOutput });
+});
+
+// ───  Handoffs ─────────────────────────────────────────────────────
+
+const customerSupportAgent = new Agent({
+  name: "Customer Support Agent",
+  instructions: `You are a customer support agent in a company that sells very fluffy pillows. Be friendly, helpful. and concise.`,
+  model: "gpt-5",
+});
+
+const escalationControlAgent = new Agent({
+  name: "Escalation Control Agent",
+  instructions: `You are an escalation control agent that handles negative customer interactions. 
+  If the customer is upset, you will apologize and offer to escalate the issue to a manager.
+Be friendly, helpful, reassuring and concise.`,
+  model: "gpt-4o",
+});
+
+// Der Triage-Agent ist der Einstiegspunkt. Er entscheidet selbst, an wen er weitergibt –
+const triageAgent = new Agent({
+  name: "Pillow Triage",
+  instructions: `NEVER answer non-pillow related questions and stop the conversation immediately. Do not handoff, when the topic is unrelated to our pillows.
+  If the question is about pillows, route it to the Customer Support Agent. 
+  If the customer's tone is negative, route it to the Escalation Control Agent.`,
+  model: "gpt-5-nano",
+  // `handoffs` listet alle Agenten, an die dieser Agent delegieren darf.
+  // Das SDK macht diese als auswählbare "Tools" für das LLM verfügbar.
+  handoffs: [
+    // Einfacher Handoff: Der Agent wird direkt übergeben, ohne zusätzliche Konfiguration.
+    customerSupportAgent,
+    // Erweiterter Handoff mit `handoff()`: Erlaubt ein typisiertes Input-Schema und
+    // einen `onHandoff`-Hook, der vor der Übergabe ausgeführt wird (z.B. für Logging).
+    handoff(escalationControlAgent, {
+      // Das LLM muss beim Handoff strukturierte Daten in diesem Format liefern.
+      inputType: z.object({ reason: z.string() }),
+      // Wird aufgerufen, sobald das LLM den Handoff auslöst – ideal für Side-Effects, z.B. Email, Slack-Notification, Ping...
+      onHandoff: async (context, input) => {
+        console.log(context);
+        console.log("HANDOFF INPUT: ", input);
+      },
+    }),
+  ],
+});
+
+app.post("/pillow-support", async (req, res) => {
+  const { prompt } = req.body;
+
+  const result = await run(triageAgent, prompt);
+
+  res.json({ result: result.finalOutput });
+});
+
+// ───  Guardrails ───────────────────────────────────────────────────
+
+const BoardSchema = z.object({
+  board: z.array(z.array(z.enum(["", "X", "O"])).length(3)).length(3),
+});
+
+// InputGuardrail: Wird VOR dem LLM-Aufruf ausgeführt.
+// Gibt `tripwireTriggered: true` zurück, um den Aufruf abzubrechen.
+const validateClientMove: InputGuardrail = {
+  name: "Client Move Valiadation",
+  async execute({ input }) {
+    let tripwireTriggered = false;
+    let outputInfo = "Valid client move";
+
+    try {
+      // Eigene Validation (was hier z.B. fehlt, ist ein Check, ob das Spiel schon vorbei ist)
+      const parsed = JSON.parse(input as string);
+      const { board } = BoardSchema.parse(parsed);
+
+      let countX = 0;
+      let countO = 0;
+
+      board.flat().forEach((cell) => {
+        if (cell === "X") countX++;
+        if (cell === "O") countO++;
+      });
+
+      if (countX !== countO + 1) {
+        tripwireTriggered = true;
+        outputInfo = "Invalid move: X must have exactly one more piece on the board than O.";
+      }
+    } catch {
+      tripwireTriggered = true;
+      outputInfo =
+        "Invalid move: Input could not be parsed or does not match the 3x3 board schema.";
+    }
+
+    return { tripwireTriggered, outputInfo }; // muss immer dieses Objekt zurückgeben
+  },
+};
+
+// OutputGuardrail: Wird *nach* dem LLM-Aufruf ausgeführt und erhält das typisierte Ergebnis.
+// Nützlich um zu prüfen, ob der Agent sich korrekt verhalten hat.
+const validAgentMoveGuardrail: OutputGuardrail<typeof BoardSchema> = {
+  name: "Agent Move Validation",
+  async execute({ agentOutput }) {
+    let tripwireTriggered = false;
+    let outputInfo = "Valid agent move.";
+
+    // Eingene Validationslogik
+    // Was hier bspw. fehlt, ist die Überprüfung,
+    // ob unser Board auch wirklich nur um ein "O" ergänzt wurde
+    // und nicht nicht die Buchstaben durcheinandergewürfelt wurden...
+    const { board } = agentOutput;
+
+    let countX = 0;
+    let countO = 0;
+
+    board.flat().forEach((cell) => {
+      if (cell === "X") countX++;
+      if (cell === "O") countO++;
+    });
+
+    if (countX !== countO) {
+      tripwireTriggered = true;
+      outputInfo = "Invalid agent move.";
+    }
+    //
+
+    return { tripwireTriggered, outputInfo };
+  },
+};
+
+const ticTacToeAgent = new Agent({
+  name: "Tic Tac Toe Player",
+  model: "google/gemini-3.1-flash-lite-preview",
+  // model: "anthropic/claude-haiku-4.6",
+  // model: "openai/gpt-5.4-mini",
+  instructions: `You are an expert Tic-Tac-Toe player playing as 'O'. 
+  You will receive a 3x3 board where the user has just played 'X'. 
+  Make your next move by placing an 'O' in exactly one empty spot (""). 
+  Do not change any existing 'X' or 'O's. Return the updated board.`,
+  inputGuardrails: [validateClientMove],
+  outputGuardrails: [validAgentMoveGuardrail],
+  // `outputType` mit einem Zod-Schema erzwingt strukturierte JSON-Ausgabe.
+  // result.finalOutput ist dann direkt als typisiertes Objekt verfügbar – kein manuelles Parsen nötig.
+  outputType: BoardSchema,
+});
+
+app.post("/play", async (req, res) => {
+  const { board } = req.body;
+
+  const inputStr = JSON.stringify({ board });
+  try {
+    const result = await run(ticTacToeAgent, inputStr);
+    // hier könnte der Spielverlauf in der Datenbank gespeichert werden
+
+    // --> Extra Bonusaufgabe: Wie können wir den Zustand überprüfen, ob ein Spieler gewonnen hat? <-- //
+
+    res.json({ result: result.finalOutput });
+  } catch (error) {
+    // Wird geworfen, wenn ein InputGuardrail `tripwireTriggered: true` zurückgibt.
+    // Der LLM-Aufruf hat in diesem Fall nie stattgefunden.
+    if (error instanceof InputGuardrailTripwireTriggered) {
+      return res.status(400).json({
+        error: "Ungültiger Spielzug vom Client. Es dürfen nur valide X-Züge eingereicht werden.",
+      });
+    }
+    // Wird geworfen, wenn ein OutputGuardrail `tripwireTriggered: true` zurückgibt.
+    // Das Modell hat geantwortet, aber die Antwort hat die Validierung nicht bestanden.
+    if (error instanceof OutputGuardrailTripwireTriggered) {
+      // const result = await run(ticTacToeAgent, inputStr); // Möglichkeit für Retries
+      return res.status(500).json({
+        error: "Der Agent hat einen ungültigen Zug gemacht und wurde gestoppt. Versuche es erneut.",
+      });
+    }
+  }
 });
 
 app.use("/{*splat}", () => {
