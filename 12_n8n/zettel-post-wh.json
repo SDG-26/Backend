@@ -1,0 +1,221 @@
+{
+  "name": "zettel-post-wh sdg26",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "responseData": "noData",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -336,
+        0
+      ],
+      "id": "df76385c-8cd9-4975-b76d-2af2ad254d23",
+      "name": "Webhook",
+      "webhookId": "ab30c416-d34f-4a15-9670-877f037edeb7"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Die Daten kommen aus dem Body des Webhooks\nconst formData = $input.first().json.body; \nconst updatedArray = [];\nconst receiptId = formData.receipt_id; // Das versteckte Feld von vorhin!\n\nlet i = 0;\n// Wir loopen so lange, bis wir eine Nummer finden, die es nicht mehr gibt\nwhile (formData[`item_${i}`] !== undefined) {\n    updatedArray.push({\n        item: formData[`item_${i}`],\n        // Wir machen aus dem Text-Preis wieder eine echte Zahl:\n        cost: parseFloat(formData[`cost_${i}`]), \n        category: formData[`category_${i}`]\n    });\n    i++;\n}\n\n// Wir geben die ID und das reparierte Array weiter\nreturn { \n    receipt_id: receiptId, \n    data: updatedArray \n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        0
+      ],
+      "id": "c59fbe35-dbe5-4611-835d-54f835745a25",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1R4VH6g02lEJhxYuVqN7wcBmel0ogJsRMuIMstNEPEO8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1R4VH6g02lEJhxYuVqN7wcBmel0ogJsRMuIMstNEPEO8/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "item": "={{ $json.item }}",
+            "cost": "={{ $json.cost }}",
+            "category": "={{ $json.category }}",
+            "date": "={{ $now }}",
+            "zettelid": "={{ $('Code in JavaScript').item.json.receipt_id }}",
+            "day": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "month": "={{ $now.toFormat('yyyy-MM') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "zettelid",
+              "displayName": "zettelid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item",
+              "displayName": "item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cost",
+              "displayName": "cost",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "day",
+              "displayName": "day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "month",
+              "displayName": "month",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        416,
+        0
+      ],
+      "id": "67cad3f4-0ba4-47d3-a960-b21435a88147",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hUdIbAYB3erNmA2K",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": " data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        192,
+        0
+      ],
+      "id": "6ee682ad-e77f-4cf1-b0d6-db159b7b0bba",
+      "name": "Split Out"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7a00aabb-4df5-4d6f-86f4-b3ea1a0885c7",
+  "meta": {
+    "instanceId": "6b948dc1e511c10ee55edde8f4d557acdc57cd5cd81c1d96dc805e9a629c900f"
+  },
+  "id": "zcitBt6EIg43ySkZ",
+  "tags": [
+    {
+      "updatedAt": "2026-03-22T10:40:47.895Z",
+      "createdAt": "2026-03-22T10:40:47.895Z",
+      "id": "Kx6dMYMFRgBgbM5c",
+      "name": "kassenzettel"
+    }
+  ]
+}

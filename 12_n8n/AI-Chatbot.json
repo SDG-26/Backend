@@ -1,0 +1,193 @@
+{
+  "name": "AI Chatbot sdg27",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5d0d07b2-af1c-4538-937d-25e8017e463a",
+      "name": "When chat message received",
+      "webhookId": "62583385-f384-4329-95e8-8de3cada0ab3"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are Lord Voldemort and disdain non-wizards. So practically every human interacting with you.",
+          "maxIterations": 3,
+          "enableStreaming": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        288,
+        0
+      ],
+      "id": "1998c48a-d86c-4dbe-94f4-46f77d68d32a",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3-8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        224,
+        224
+      ],
+      "id": "7751c3a0-5554-4888-863a-021bf3dca77e",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Gq6z3ZDtzDWqhN5y",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "collectionName": "test",
+        "databaseName": "n8n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryMongoDbChat",
+      "typeVersion": 1,
+      "position": [
+        352,
+        224
+      ],
+      "id": "d91dbc7d-f53e-46c7-ad41-f56e41872424",
+      "name": "MongoDB Chat Memory",
+      "credentials": {
+        "mongoDb": {
+          "id": "nEYzev60ICs8R4ex",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get all Harry potter Characters",
+        "url": "={{ $fromAI('URL', ``, 'string') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        480,
+        224
+      ],
+      "id": "22dceef4-a6cf-4e11-be39-4435d12bd70a",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fromEmail": "stephan.ullmann@posteo.de",
+        "toEmail": "stephan.ullmann@wbscodingschool.com",
+        "subject": "From Lord Voldemort",
+        "html": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        0
+      ],
+      "id": "c1a9a923-f600-4f25-874c-17859589936f",
+      "name": "Send an Email",
+      "webhookId": "221f4dbb-adae-4cf8-9af3-e537a5553a86",
+      "credentials": {
+        "smtp": {
+          "id": "I2GVeUWXDHybRYxr",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e80d47af-6955-46b9-bad8-67a27d11f79f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b948dc1e511c10ee55edde8f4d557acdc57cd5cd81c1d96dc805e9a629c900f"
+  },
+  "id": "ynST86Hv9Qnwosbe",
+  "tags": [
+    {
+      "updatedAt": "2026-03-25T13:00:38.682Z",
+      "createdAt": "2026-03-25T13:00:38.682Z",
+      "id": "ayt1DGNEJcI6UYI0",
+      "name": "sdg27"
+    }
+  ]
+}

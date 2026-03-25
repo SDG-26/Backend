@@ -1,0 +1,270 @@
+{
+  "name": "Telegram-Voice-Transcription sdg26",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": true,
+          "chatIds": ""
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        -112
+      ],
+      "id": "4fa74509-98f2-4a57-a264-875cc2915d20",
+      "name": "Telegram Trigger",
+      "webhookId": "ac8d1974-0db7-4f9b-931b-e9579d51955a",
+      "credentials": {
+        "telegramApi": {
+          "id": "cFvrqvuhqqcf5fUN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        96,
+        -208
+      ],
+      "id": "d1feb733-1fbf-4fc8-9d54-5729d5daa9d5",
+      "name": "Get a file",
+      "webhookId": "018d3c90-21d2-4156-b26e-9605a93d20b5",
+      "credentials": {
+        "telegramApi": {
+          "id": "cFvrqvuhqqcf5fUN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "audio",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        -240
+      ],
+      "id": "e0614854-73ee-4ca6-9abc-128381fdaeec",
+      "name": "Transcribe a recording",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "rIaONvBXomJlFkII",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.content.parts[0].text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        544,
+        -112
+      ],
+      "id": "56faadb5-5009-4830-8bdb-72cb6b4f7144",
+      "name": "Send a text message",
+      "webhookId": "e3c32674-791b-4154-9502-91e380b46ecc",
+      "credentials": {
+        "telegramApi": {
+          "id": "cFvrqvuhqqcf5fUN",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.message.voice }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "object",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "id": "987b56ea-b158-419d-8f58-b2cc33fd3fd1"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c4802258-8d3d-4e1a-aff8-39a7d38b77a5",
+                    "leftValue": "={{ $json.message.photo }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "array",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -128,
+        -112
+      ],
+      "id": "38b0774c-8810-47fc-89ab-23583affdb65",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        -16
+      ],
+      "id": "20b5bed7-2603-47aa-8252-5742ddb20809",
+      "name": "Analyze an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "rIaONvBXomJlFkII",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Transcribe a recording",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe a recording": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f701d252-f4d6-4351-8bc0-3cd1fc70ad24",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b948dc1e511c10ee55edde8f4d557acdc57cd5cd81c1d96dc805e9a629c900f"
+  },
+  "id": "1xE9oQ9qX71agFmV",
+  "tags": []
+}

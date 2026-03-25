@@ -1,0 +1,316 @@
+{
+  "name": "Travel Support Router",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "You classify customer travel questions into Hotel, Flight or Activities. Respond ONLY with the category word."
+        }
+      },
+      "id": "e24e4c5e-bdcb-47a9-abf1-95969a635499",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        -848,
+        304
+      ],
+      "name": "AI Classifier",
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "Hotel",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "781edb66-fbf4-4ddc-ba92-63557b650644"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f2a42da2-da0b-4a0f-be55-11517ee0929f",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "Flight",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cf185b2a-ee5e-4949-890f-ef3b31c49461",
+                    "leftValue": "={{ $json.output }}",
+                    "rightValue": "Activities",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "37e8a9d5-0f40-4bd6-8e22-0ca92fe20702",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        -496,
+        288
+      ],
+      "name": "Route by Category",
+      "typeVersion": 3.3
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=User asking about the {{ $('AI Classifier').item.json.output }}: \"{{ $('When chat message received').item.json.chatInput }}\"",
+        "options": {
+          "systemMessage": "You give hotel advice, pricing ranges and accommodation suggestions."
+        }
+      },
+      "id": "c9b1bbbc-6321-42dc-b3b0-d99c4ed53bcb",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        192,
+        -240
+      ],
+      "name": "Hotel Advisor",
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('When chat message received').item.json.chatInput }}",
+        "options": {
+          "systemMessage": "You help with flights, fare changes and luggage policies."
+        }
+      },
+      "id": "24187526-6fa0-4319-a9ee-68833f660786",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        240,
+        304
+      ],
+      "name": "Flight Advisor",
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json['body'] }}",
+        "options": {
+          "systemMessage": "You recommend experiences, tours, day trips and outdoor plans."
+        }
+      },
+      "id": "c871c999-535c-42df-be17-efb58d9b7ac1",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        -672,
+        608
+      ],
+      "name": "Activity Planner",
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -1072,
+        304
+      ],
+      "id": "c8be982d-3422-4181-a93d-74931318468b",
+      "name": "When chat message received",
+      "webhookId": "2acea7b1-dbcb-43a4-8279-30d7e44a50a6"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 20
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        -48,
+        560
+      ],
+      "id": "de0adc32-04b4-4a32-ad87-3c3309b387b0",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -272,
+        128
+      ],
+      "id": "1a1c08c7-42cc-45a8-8473-6ebc8a9c1fca",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "PKH9L53ZdNChWpgT",
+          "name": "Ollama account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "AI Classifier": {
+      "main": [
+        [
+          {
+            "node": "Route by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Category": {
+      "main": [
+        [
+          {
+            "node": "Hotel Advisor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Flight Advisor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Activity Planner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Classifier",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Hotel Advisor",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Flight Advisor",
+            "type": "ai_memory",
+            "index": 0
+          },
+          {
+            "node": "Activity Planner",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Hotel Advisor",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Flight Advisor",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Activity Planner",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "434963fd-649c-4c9f-8216-f788b147ed34",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b948dc1e511c10ee55edde8f4d557acdc57cd5cd81c1d96dc805e9a629c900f"
+  },
+  "id": "8RJQzILYUv5kTbxK",
+  "tags": []
+}

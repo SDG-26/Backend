@@ -1,0 +1,652 @@
+{
+  "name": "zettel-ocr sdg26",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": false
+        }
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        432
+      ],
+      "id": "ccf05d9d-2103-464e-a182-c2da0228070d",
+      "name": "Telegram Trigger",
+      "webhookId": "772b2a36-1095-46c2-ad27-ea458a837619",
+      "credentials": {
+        "telegramApi": {
+          "id": "3kYy3qVGb849FBXc",
+          "name": "Telegram OCR"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[2].file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        432
+      ],
+      "id": "5ee61941-aa3a-4efd-9bea-cabaeac84f18",
+      "name": "Get a file",
+      "webhookId": "3abd996f-b26a-4449-b8aa-522094bd527e",
+      "credentials": {
+        "telegramApi": {
+          "id": "3kYy3qVGb849FBXc",
+          "name": "Telegram OCR"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3-flash-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3-flash-preview"
+        },
+        "text": "Du bist ein hochpräziser Assistent für die Datenextraktion. Deine Aufgabe ist es, den angehängten Kassenbon auszulesen.\n\nExtrahiere alle gekauften Artikel, deren Preise und ordne jeden Artikel einer passenden Kategorie zu.\n\nWÄHLE FÜR \"category\" AUSSCHLIESSLICH AUS DIESER LISTE:\n\nLebensmittel\n\nSüßwaren\n\nGetränke\n\nAlkohol\n\nDrogerie & Haushalt\n\nPfand/Leergut\n\nSonstiges\n\nWICHTIG FÜR DIE AUSGABE:\n\nGib das Ergebnis AUSSCHLIESSLICH als valides JSON-Array aus.\n\nFüge absolut keinen einleitenden oder abschließenden Text hinzu.\n\nVerwende KEINE Markdown-Blöcke (wie ```json). Beginne direkt mit der eckigen Klammer [ und ende mit ].\n\nDie Preise (\"cost\") müssen als Zahlen (Floats) formatiert sein, nicht als Text (also 2.39 statt \"2.39\"). Beachte auch negative Werte bei Rückgaben/Leergut.\n\nVerwende exakt dieses Format als Vorlage für deine Ausgabe:\n[\n{\n\"item\": \"Erbsen\",\n\"cost\": 2.39,\n\"category\": \"Lebensmittel\"\n},\n{\n\"item\": \"Finish Reiniger\",\n\"cost\": 2.49,\n\"category\": \"Drogerie & Haushalt\"\n},\n{\n\"item\": \"Jack Daniels Cola Zero\",\n\"cost\": 1.99,\n\"category\": \"Alkohol\"\n},\n{\n\"item\": \"Einwegpfand\",\n\"cost\": 0.25,\n\"category\": \"Pfand/Leergut\"\n},\n{\n\"item\": \"Einwegleergut 19%\",\n\"cost\": -2.00,\n\"category\": \"Pfand/Leergut\"\n}\n]",
+        "inputType": "binary",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        432
+      ],
+      "id": "2c3a4989-d98b-43df-a1c3-83ca758b7adf",
+      "name": "Analyze an image",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "rIaONvBXomJlFkII",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.content.parts[0].text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Stelle sicher, dass der Input dem angeforderten Schema entspricht."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        704,
+        432
+      ],
+      "id": "21e49be2-db26-4b36-90bf-2ec6682c5a76",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"array\",\n  \"items\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"item\": {\n        \"type\": \"string\",\n        \"description\": \"Der Name des gekauften Artikels\"\n      },\n      \"cost\": {\n        \"type\": \"number\",\n        \"description\": \"Der Preis des Artikels als Zahl\"\n      },\n      \"category\": {\n  \"type\": \"string\",\n  \"description\": \"Die Kategorie des Artikels\"\n}\n    },\n    \"required\": [\"item\", \"cost\", \"category\"]\n  }\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        800,
+        656
+      ],
+      "id": "5f8a89c9-16da-48f1-aed5-33812d809f7a",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        880,
+        864
+      ],
+      "id": "86466de6-d657-4d80-ba55-a1dcb9c3e10c",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Gq6z3ZDtzDWqhN5y",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "mistralai/mistral-medium-3.1",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        672,
+        656
+      ],
+      "id": "66b58934-c962-44ed-b898-41219283377e",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Gq6z3ZDtzDWqhN5y",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "message": "={{ $('Code in JavaScript').item.json.text }}\n\nTotal: {{ $('Code in JavaScript').item.json.total }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "disapproveLabel": "📜 Edit"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1840,
+        432
+      ],
+      "id": "2e27487b-4f74-467b-9722-bd4a05ce83ef",
+      "name": "Send message and wait for response",
+      "webhookId": "543a9919-6262-4a41-a67f-29b2a666e253",
+      "credentials": {
+        "telegramApi": {
+          "id": "3kYy3qVGb849FBXc",
+          "name": "Telegram OCR"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nlet execId = $execution.id;\nlet text = `🧾 **Neuer Kassenbon erkannt!**\\n`;\nlet total = 0;\nlet html = `<h2>Kassenbon korrigieren</h2>\n  <form action=\">>>WEBHOOK EINSETZEN<<<\" method=\"POST\">\n  <input type=\"hidden\" name=\"receipt_id\" value=\"${execId}\">`\n\nfor (let i = 0; i < $input.first().json.output.length; i++) {\n  let item = $input.first().json.output[i];\n  const addText = `\n🛒 **${item.item}**\n💶 ${item.cost} € | 🏷️ ${item.category}\n`\n  text += addText\n  total += item.cost\n\n  html += `<div style=\"margin-bottom: 10px;\">\n      <input type=\"text\" name=\"item_${i}\" value=\"${item.item}\">\n      <input type=\"number\" step=\"0.01\" name=\"cost_${i}\" value=\"${item.cost}\">\n      <input type=\"text\" name=\"category_${i}\" value=\"${item.category}\">\n    </div>`;\n}\n\nhtml += `<button type=\"submit\">Änderungen speichern</button></form>`;\n\nreturn {text, total, html}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        432
+      ],
+      "id": "44b971e5-937b-4cfa-bbfd-9a6bdc6fd233",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "html": "<!DOCTYPE html>\n\n<html>\n<head>\n  <meta charset=\"UTF-8\" />\n  <title>My HTML document</title>\n</head>\n<body>\n  <div class=\"container\">\n    {{ $json.html }}\n  </div>\n\n\n<style>\n  html {\n    color-scheme: dark;\n  }\n.container {\n  text-align: center;\n  padding: 16px;\n  border-radius: 8px;\n}\n\nh1 {\n  font-size: 24px;\n  font-weight: bold;\n  padding: 8px;\n}\n\nh2 {\n  font-size: 18px;\n  font-weight: bold;\n  padding: 8px;\n}\n</style>\n\n</body>\n</html>"
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        1392,
+        432
+      ],
+      "id": "b8e2f295-c500-4082-8161-3b5002024d2d",
+      "name": "HTML"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "TrgvcHqyI6Aq2ZIU",
+          "mode": "list",
+          "cachedResultName": "kassenzettel",
+          "cachedResultUrl": "/projects/XJIjlMZFCxfRf2Fm/datatables/TrgvcHqyI6Aq2ZIU"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "zettelhtml": "={{ $json.html }}",
+            "zettelid": "={{ $execution.id }}"
+          },
+          "matchingColumns": [
+            "zettelhtml"
+          ],
+          "schema": [
+            {
+              "id": "zettelhtml",
+              "displayName": "zettelhtml",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "zettelid",
+              "displayName": "zettelid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1616,
+        432
+      ],
+      "id": "ff38e687-9eba-461e-ad4b-df00c547db7c",
+      "name": "Insert row"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "83b52001-f1e8-4359-abea-e4de740c40c5",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2064,
+        432
+      ],
+      "id": "b88f8fe8-8d2b-4fb2-996b-fd32d8eb29db",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "text": "=<webhook mit n8n-execution.id>{{ $execution.id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2288,
+        528
+      ],
+      "id": "3b69b1d7-1c05-4998-9854-da0b8a39794d",
+      "name": "Send a text message",
+      "webhookId": "1188a792-c5a6-466d-8f9f-d6bb10607ea2",
+      "credentials": {
+        "telegramApi": {
+          "id": "3kYy3qVGb849FBXc",
+          "name": "Telegram OCR"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1R4VH6g02lEJhxYuVqN7wcBmel0ogJsRMuIMstNEPEO8",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1R4VH6g02lEJhxYuVqN7wcBmel0ogJsRMuIMstNEPEO8/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "item": "={{ $json.item }}",
+            "cost": "={{ $json.cost }}",
+            "category": "={{ $json.category }}",
+            "date": "={{ $now }}",
+            "zettelid": "={{ $('Insert row').item.json.zettelid }}",
+            "day": "={{ $now.toFormat('yyyy-MM-dd') }}",
+            "month": "={{ $now.toFormat('yyyy-MM') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "zettelid",
+              "displayName": "zettelid",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "item",
+              "displayName": "item",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cost",
+              "displayName": "cost",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "day",
+              "displayName": "day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "month",
+              "displayName": "month",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2736,
+        336
+      ],
+      "id": "65204c0f-10cd-490f-99ad-2bd883bb1bd9",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hUdIbAYB3erNmA2K",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3bfcac38-bf34-4bf5-a460-e48886cc44a9",
+              "name": "output",
+              "value": "={{ $('AI Agent').item.json.output }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2288,
+        336
+      ],
+      "id": "2bf050b0-d8fb-420f-92ef-bd05432140cd",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "output",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        336
+      ],
+      "id": "2934d38e-7c84-4836-b4b6-0a1d6d10c5c0",
+      "name": "Split Out"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Analyze an image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze an image": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML": {
+      "main": [
+        [
+          {
+            "node": "Insert row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert row": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "58920d4f-1a5b-4219-89f7-eb31fbc74793",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6b948dc1e511c10ee55edde8f4d557acdc57cd5cd81c1d96dc805e9a629c900f"
+  },
+  "id": "frWu4399fy3cSHX3",
+  "tags": [
+    {
+      "updatedAt": "2026-03-22T10:40:47.895Z",
+      "createdAt": "2026-03-22T10:40:47.895Z",
+      "id": "Kx6dMYMFRgBgbM5c",
+      "name": "kassenzettel"
+    }
+  ]
+}
